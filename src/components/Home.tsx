@@ -7,6 +7,12 @@ import { Message, User } from "../types"
 // 2. If the connection happens successfully the server will emit an event called "welcome"
 // 3. If we want to do something when that event happens --> we shall LISTEN to that event by using socket.on("welcome")
 // 4. Once we are in we want to submit the username --> we shall EMIT an event called "setUsername"
+// 5. Server listen for "setUsername" event and it sends to whoever is listening the list of online users with a "loggedIn" event
+// 6. If client wants to display the list of online users, it should listen for the "loggedIn" event
+// 7. In this way the list of online users is updated only during login, but what happens if a new user joins? Server emits a "newConnection" event containing an update list
+// 8. We shall listen to the "newConnection" event to update the list when somebody joins or leaves
+// 9. When client sends a message it should trigger a "sendMessage" event
+// 10. Server listens for that and then broadcast to everybody but the sender an event called "newMessage", who is listening for that can now display the new message
 
 const socket = io("http://localhost:3001", { transports: ["websocket"] })
 // if you do not specify the transport ("websocket"),
@@ -35,6 +41,16 @@ const Home = () => {
           console.log("A new user connected!")
           setOnlineUsers(onlineUsersList)
         })
+
+        socket.on("newMessage", receivedMessage => {
+          console.log("new message ", receivedMessage)
+          /*  setChatHistory([...chatHistory, receivedMessage.message]) 
+              if we gonna set the state just by passing a value, the new message will be appended to the initial state (empty chat history [])
+              since we don't want that we can use an overload of the set state function which, instead of receiving a value as parameter, it takes a callback function
+              this is going to give us the possibility to access to the up-to-date chat history array
+          */
+          setChatHistory(chatHistory => [...chatHistory, receivedMessage.message])
+        })
       })
     })
   })
@@ -45,6 +61,18 @@ const Home = () => {
     socket.emit("setUsername", { username })
     // once the server receives the username it is going to emit another event called "loggedIn" which ends the login process
     // this should put us on the online users list (the server will communicate that list with the "loggedIn" event)
+  }
+
+  const sendMessage = () => {
+    const newMessage: Message = {
+      sender: username,
+      text: message,
+      createdAt: new Date().toLocaleString("en-US"),
+    }
+
+    // server is set up to listen for "sendMessage" events
+    socket.emit("sendMessage", { message: newMessage })
+    setChatHistory([...chatHistory, newMessage])
   }
 
   return (
@@ -81,6 +109,7 @@ const Home = () => {
           <Form
             onSubmit={e => {
               e.preventDefault()
+              sendMessage()
             }}
           >
             <FormControl
